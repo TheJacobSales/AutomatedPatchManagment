@@ -2,6 +2,7 @@
 import logging.handlers
 from pickle import FALSE
 from ssl import VerifyMode
+from turtle import pos
 from urllib import response
 
 
@@ -17,6 +18,66 @@ APPNAME = "APM"
 LOGLEVEL = logging.DEBUG
 
 __all__ = [APPNAME]
+
+class PST:
+    pstID = ""
+    distMethod = ""
+    delay = 0
+    jamfUrl = ""
+    postHeader = ""
+    getHeader = ""
+
+    def __init__(self, baseUrl, postHeader, getHeader, pstID):
+        self.jamfUrl = baseUrl
+        self.postHeader = postHeader
+        self.getHeader = getHeader
+        self.pstID = pstID
+        pass
+    
+    def createPolicy(self, policyName, appName, definitionVersion, distributionMethod, gracePeriod):
+        print("Creating Policy...")
+        # payload = f"""
+        # <patch_policy><general><name>Gamma</name><enabled>false</enabled><distribution_method>{distributionMethod}</distribution_method>
+        # <allow_downgrade>false</allow_downgrade><patch_unknown>true</patch_unknown></general><user_interaction>
+        # <grace_period><grace_period_duration>60</grace_period_duration></grace_period></user_interaction>
+        # <software_title_configuration_id></software_title_configuration_id></patch_policy>
+        # """
+        #Create a Patch Policy asociated to the patch ID
+        if distributionMethod == "prompt":
+            tree = ET.parse("ppPromptTemplate.xml")
+            root = tree.getroot()
+        else:
+            tree = ET.parse("ppSelfServiceTemplate.xml")
+            root = tree.getroot()
+            ### Edit XML Here
+            root.find("user_interaction/self_service_description").text = f"Uptdate {appName}"
+            root.find("user_interaction/notifications/notification_subject").text = "Update Available"
+            root.find("user_interaction/notifications/notification_message").text = f"{appName} Update Installing"
+        ### Edit XML Here
+        root.find("general/name").text = str(policyName)
+        root.find("software_title_configuration_id").text = self.pstID
+        root.find("general/target_version").text = definitionVersion
+        root.find("user_interaction/grace_period/grace_period_duration").text = gracePeriod
+
+        ###
+        xmlstr = ET.tostring(root, encoding='unicode', method='xml')
+        # print(xmlstr)
+        xmlstr = xmlstr.replace("\n","")
+        # xmlstr = xmlstr.replace(" ","")
+        # print(xmlstr)
+        postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
+        response = self.EnvObject.download(url=postURL, headers=self.postHeader, data=xmlstr)
+        decodedResponse = response.decode('utf-8')
+        softwareTitles = json.loads(decodedResponse)
+        if response.status_code == 201:
+            print(f"{policyName} policy was created successfully. This Policy was created with no "
+                f"scope and disabled. When ready go and set a scope and then enable policy.")
+        else:
+            print(f"{policyName} policy failed to create with error code: {response.status_code}")
+        return
+
+    def getPolicy():
+        return
 
 class Cache:
     cacheAPMPath = ""
@@ -80,7 +141,8 @@ class Gamma:
         apiPassword = self.EnvObject.env.get("API_PASSWORD")
         patchPoliciesURL = f"{self.jamfUrl}/JSSResource/policies/name/{generalPolicyName}"
         print(patchPoliciesURL)
-        self.getHeader, self.postHeader= urllib3.make_headers(basic_auth=f"{apiUsername}:{apiPassword}")
+        self.getHeader= urllib3.make_headers(basic_auth=f"{apiUsername}:{apiPassword}")
+        self.postHeader = self.getHeader
         self.getHeader["Accept"] = "application/json"
         response = self.EnvObject.download(patchPoliciesURL, headers=self.getHeader)
         decodedResponse = response.decode('utf-8')
@@ -106,6 +168,7 @@ class Gamma:
         ##Check if Gamma Policy
         #return True if exists else create new gamma policy
         #Get software title ID if it exists
+        print("Checking if Gamma Exists..")
         patchName = self.EnvObject.env.get("patchSoftwareTitle")
         allPatchesURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles"
         response = self.EnvObject.download(url=allPatchesURL, headers=self.getHeader)
@@ -147,50 +210,6 @@ class Gamma:
         # patchPolicies = response.json()
         # print(patchPolicies)
         return False
-    
-    def __createGammaPolicy(self, patchID, definitionVersion):
-        distributionMethod = self.EnvObject.get("gammaDistributionMethod")
-        policyName = self.EnvObject.get("generalPolicyName")
-        gracePeriod = 7 ### Need To Finda a better way to set grace period
-        # payload = f"""
-        # <patch_policy><general><name>Gamma</name><enabled>false</enabled><distribution_method>{distributionMethod}</distribution_method>
-        # <allow_downgrade>false</allow_downgrade><patch_unknown>true</patch_unknown></general><user_interaction>
-        # <grace_period><grace_period_duration>60</grace_period_duration></grace_period></user_interaction>
-        # <software_title_configuration_id></software_title_configuration_id></patch_policy>
-        # """
-        #Create a Patch Policy asociated to the patch ID
-        if distributionMethod == "prompt":
-            tree = ET.parse("ppPromptTemplate.xml")
-            root = tree.getroot()
-        else:
-            tree = ET.parse("ppSelfServiceTemplate.xml")
-            root = tree.getroot()
-            ### Edit XML Here
-            root.find("user_interaction/self_service_description").text = f"Uptdate {self.pkgName}"
-            root.find("user_interaction/notifications/notification_subject").text = "Update Available"
-            root.find("user_interaction/notifications/notification_message").text = f"{self.pkgName} Update Installing"
-        ### Edit XML Here
-        root.find("general/name").text = str(policyName)
-        root.find("software_title_configuration_id").text = patchID
-        root.find("general/target_version").text = definitionVersion
-        root.find("user_interaction/grace_period/grace_period_duration").text = gracePeriod
-
-        ###
-        xmlstr = ET.tostring(root, encoding='unicode', method='xml')
-        # print(xmlstr)
-        xmlstr = xmlstr.replace("\n","")
-        # xmlstr = xmlstr.replace(" ","")
-        # print(xmlstr)
-        postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{patchID}"
-        response = self.EnvObject.download(url=postURL, headers=self.postHeader, data=xmlstr)
-        decodedResponse = response.decode('utf-8')
-        softwareTitles = json.loads(decodedResponse)
-        if response.status_code == 201:
-            print(f"{policyName} policy was created successfully. This Policy was created with no "
-                f"scope and disabled. When ready go and set a scope and then enable policy.")
-        else:
-            print(f"{policyName} policy failed to create with error code: {response.status_code}")
-        return
 
     def __checkPolicyVersion():
         ##Checks to see if Gamma has latest version and that definition has a pkg
@@ -221,8 +240,6 @@ class Prod:
         ##Compares the Delta Variable with the (current time) - (timw when patch was created)
         ##returns True if result of diff is <= 0 else returns False
         return False
-    
-
 
 class Application:
     """A class to carry the details of the application through the processor"""
