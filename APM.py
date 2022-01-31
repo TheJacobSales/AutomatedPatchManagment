@@ -1,4 +1,5 @@
 # from functools import cache
+# from importlib.metadata import distribution
 import logging.handlers
 import os
 import json
@@ -26,15 +27,15 @@ class PST:
         self.jamfUrl = baseUrl
         self.postHeader = postHeader
         self.getHeader = getHeader
-        self.pstID = pstID
+        self.pstID = self.getPstID(self.EnvObject.env.get("patchSoftwareTitle"))
         pass
 
     def updatePST(self, pkg, pstID):
         print("starting update pst")
         pstURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles/id/{pstID}"
-        getXmlHeader = self.getHeader
-        del getXmlHeader["Accept"]
-        response = self.EnvObject.download(url=pstURL, headers=getXmlHeader)
+        self.getHeader.pop("Accept")
+        print(f"After pop: {self.getHeader}")
+        response = self.EnvObject.download(url=pstURL, headers=self.getHeader)
         if not response:
             print("get pst failed")
         pst = response.decode('utf-8')
@@ -44,7 +45,9 @@ class PST:
             if pkg["version"] in definition.findtext("software_version"):
                 if definition.findtext("package/name"):
                     print(f"definition already has a package {definition.findtext('package/name')}")
-                    return
+                    ## Return getHeader to is prior state
+                    self.getHeader["Accept"] = "application/json"
+                    return None
                 updatePkg = definition.find("package")
                 add = ET.SubElement(updatePkg, "id")
                 add.text = str(pkg["id"])
@@ -64,9 +67,11 @@ class PST:
             "--location",
             "-H",
             header,
+            "-H",
+            "Content-Type: application/xml",
             "-X",
             "PUT",
-            "--data-binary",
+            "-d",
             data
         )
         print(curl_cmd)
@@ -76,6 +81,8 @@ class PST:
             print("update to jamf failed")
         else:
             print(response)
+        ## Return getHeader to is prior state
+        self.getHeader["Accept"] = "application/json"
         print("leaving update Pst")
         return (pstID)
 
@@ -103,22 +110,34 @@ class PST:
         # print(xmlstr)
         xmlstr = xmlstr.replace("\n", "")
         # xmlstr = xmlstr.replace(" ","")
-        # print(xmlstr)
+        print(xmlstr)
         postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
-        response = self.EnvObject.download(url=postURL, headers=self.postHeader, data=xmlstr)
-        decodedResponse = response.decode('utf-8')
-        softwareTitles = json.loads(decodedResponse)
-        if response.status_code == 201:
-            print(f"{policyName} policy was created successfully. This Policy was created with no "
-                  f"scope and disabled. When ready go and set a scope and then enable policy.")
+        header = f"authorization: {self.postHeader['authorization']}"
+        curl_cmd = (
+            self.EnvObject.curl_binary(),
+            "--url",
+            postURL,
+            "--location",
+            "-H",
+            header,
+            "-H",
+            "Content-Type: application/xml",
+            "-X",
+            "POST",
+            "-d",
+            xmlstr
+        )
+        response = self.EnvObject.download_with_curl(curl_cmd)
+        if not response:
+            print("update to jamf failed")
         else:
-            print(f"{policyName} policy failed to create with error code: {response.status_code}")
-        return
+            print(response)
 
     def getGeneralPolicy(self, generalPolicyName):
         print("starting get General Policy")
         generalPolicyURL = f"{self.jamfUrl}/JSSResource/policies/name/{generalPolicyName}"
         response = self.EnvObject.download(url=generalPolicyURL, headers=self.getHeader)
+        print("past download")
         decodedResponse = response.decode('utf-8')
         generalPolicy = json.loads(decodedResponse)
         pkgCount = len(generalPolicy["policy"]["package_configuration"]["packages"])
@@ -133,10 +152,29 @@ class PST:
         print(f"returning {pkg['appName']} with type {pkg['type']} and version {pkg['version']}")
         return pkg
 
+    def gammaPolicyExist(self):
+        ##Check if Gamma Policy
+        print("Checking if Gamma Exists..")
+        # looking for policy named gamma sorted by pst ID
+        patchID = self.getPstID(self.EnvObject.env.get("patchSoftwareTitle"))
+        allPolicesURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{patchID}"
+        response = self.EnvObject.download(url=allPolicesURL, headers=self.getHeader)
+        decodedResponse = response.decode('utf-8')
+        allPolicies = json.loads(decodedResponse)
+        for policy in allPolicies["patch policies"]:
+            if "gamma" == policy["name"].lower():
+                policyID = str(policy["id"])
+                print(f"Found gamma policy with ID of {policyID}")
+                return True
+        print(f"Cound not find policy with name: Gamma in {APPNAME}\nAPM will now attempt to create that policy")
+        return False
+
     def getPstID(self, pstTitle):
         print("starting getPstId")
         allPatchesURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles"
+        print(self.getHeader)
         response = self.EnvObject.download(url=allPatchesURL, headers=self.getHeader)
+        print(response)
         decodedResponse = response.decode('utf-8')
         softwareTitles = json.loads(decodedResponse)
         foundPst = False
@@ -205,43 +243,51 @@ class Cache:
 
 class Gamma:
     pkgName = ""
-    generalPolicyID = ""
+    generalPolicyName = ""
     jamfUrl = ""
     getHeader = {}
     postHeader = {}
+    apiUsername = ""
+    apiPassword = ""
+    distributionMethod = ""
 
     def __init__(self, EnvObject):
         ##Constructor(initializer) that activates when an object is created
         self.EnvObject = EnvObject
         self.pkgName = self.EnvObject.env.get("applicationTitle")
-        self.jamfUrl = self.EnvObject.env.get("JSS_URL")
-        generalPolicyName = self.EnvObject.env.get("generalPolicyName")
-        apiUsername = self.EnvObject.env.get("API_USERNAME")
-        apiPassword = self.EnvObject.env.get("API_PASSWORD")
-        patchPoliciesURL = f"{self.jamfUrl}/JSSResource/policies/name/{generalPolicyName}"
-        self.getHeader = urllib3.make_headers(basic_auth=f"{apiUsername}:{apiPassword}")
-        self.postHeader = self.getHeader
+        self.generalPolicyName = self.EnvObject.env.get("generalPolicyName")
+        self.apiUsername = self.EnvObject.env.get("API_USERNAME")
+        self.apiPassword = self.EnvObject.env.get("API_PASSWORD")
+        self.distributionMethod = self.EnvObject.env.get("gammaDistributionMethod")
+        self.getHeader = urllib3.make_headers(basic_auth=f"{self.apiUsername}:{self.apiPassword}")
         self.getHeader["Accept"] = "application/json"
-        response = self.EnvObject.download(patchPoliciesURL, headers=self.getHeader)
-        decodedResponse = response.decode('utf-8')
-        patchPolicies = json.loads(decodedResponse)
-        self.generalPolicyID = patchPolicies["policy"]["general"]["category"]["id"]
-
-    def gammaPolicyExist(self, patchID):
-        ##Check if Gamma Policy
-        print("Checking if Gamma Exists..")
-        # looking for policy named gamma sorted by pst ID
-        allPolicesURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{patchID}"
-        response = self.EnvObject.download(url=allPolicesURL, headers=self.getHeader)
-        decodedResponse = response.decode('utf-8')
-        allPolicies = json.loads(decodedResponse)
-        for policy in allPolicies["patch policies"]:
-            if "gamma" == policy["name"].lower():
-                policyID = str(policy["id"])
-                print(f"Found gamma policy with ID of {policyID}")
-                return True
-        print(f"Cound not find policy with name: Gamma in {APPNAME}\nAPM will now attempt to create that policy")
-        return False
+        self.postHeader = urllib3.make_headers(basic_auth=f"{self.apiUsername}:{self.apiPassword}")
+        
+    def compGammaPtch(self):
+        ## Public function
+        ## Contains logic to complete Gamma Patch
+        cacheObject = Cache(self.EnvObject)
+        cacheLoadStatus, cache = cacheObject.getCache()
+        # was trying to test pst but needed to send apiusername and api password
+        getHeader = urllib3.make_headers(basic_auth=f"{self.apiUsername}:{self.apiPassword}")
+        postHeader = getHeader
+        getHeader["Accept"] = "application/json"
+        pst = PST(self.EnvObject, self.EnvObject.env.get("JSS_URL"), getHeader=getHeader, postHeader=postHeader)
+        generalPkg = pst.getGeneralPolicy(self.generalPolicyName)
+        pstID = pst.getPstID(self.EnvObject.env.get("patchSoftwareTitle"))
+        pst.updatePST(pkg=generalPkg, pstID=pstID)
+        if cacheLoadStatus:
+            print("cache load status succeeded proceeding to prodution")
+            print(cache["date"])
+            prod = Prod(self)
+            print(prod.checkDelta(self.EnvObject.env.get("productionDelay"), cache["date"]))
+        else:
+            print("cache load status is false so Production was skipped")
+        if not pst.gammaPolicyExist():
+            pst.createPolicy(appName=self.pkgName, policyName = "Gamma", definitionVersion=generalPkg["version"], distributionMethod=self.distributionMethod)
+        # get Cache seems to work
+        # not to test Set cache?
+        return
 
     def __checkPolicyVersion():
         ##Checks to see if Gamma has latest version and that definition has a pkg
@@ -251,7 +297,7 @@ class Gamma:
         ##Updates the policy version in cache
         return
 
-    def updateGammaPtch(self, patchID, distributionMethod):
+    def __updateGammaPtch(self, patchID, distributionMethod):
         ## Public function
         ## Contains logic to update Gamma Patch
 
@@ -340,36 +386,10 @@ class APM(URLGetter):
 
     def main(self):
         print("My custom processor!")
-        cacheObject = Cache(self)
-        cacheLoadStatus, cache = cacheObject.getCache()
-        # was trying to test pst but needed to send apiusername and api password
-        apiUsername = self.env.get("API_USERNAME")
-        apiPassword = self.env.get("API_PASSWORD")
-        getHeader = urllib3.make_headers(basic_auth=f"{apiUsername}:{apiPassword}")
-        postHeader = getHeader
-        getHeader["Accept"] = "application/json"
-        pst = PST(self, self.env.get("JSS_URL"), getHeader=getHeader, postHeader=postHeader)
-        generalPkg = pst.getGeneralPolicy(self.env.get("generalPolicyName"))
-        pstID = pst.getPstID(self.env.get("patchSoftwareTitle"))
-        pst.updatePST(pkg=generalPkg, pstID=pstID)
-        if cacheLoadStatus:
-            print("cache load status succeeded proceeding to prodution")
-            print(cache["date"])
-            prod = Prod(self)
-            print(prod.checkDelta(self.env.get("productionDelay"), cache["date"]))
-        else:
-            print("cache load status is false so Production was skipped")
-
+        pstCahce = Cache(self.EnvObject)
+        cacheLoadStatus, cache = pstCahce.getCache()
         gamma = Gamma(self)
-
-        if not gamma.gammaPolicyExist(patchID=patchID):
-            pst.createPolicy()
-
-
-
-        gamma.compGammaPtch(patchID= patchID, distributionMethod= self.env.get("gammaDistributionMethod"))
-        # get Cache seems to work
-        # not to test Set cache?
+        gamma.compGammaPtch()
 
 
 if __name__ == "__main__":
