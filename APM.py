@@ -63,15 +63,17 @@ class PST:
                 break
         data = ET.tostring(root)
         # header = self.postHeader
+        auth = f"authorization: {self.postHeader['authorization']}"
+        type = f"Content-type: {self.postHeader['Content-Type']}"
         curl_cmd = (
             self.EnvObject.curl_binary(),
             "--url",
             pstURL,
             "--location",
             "-H",
-            self.postHeader,
+            auth,
             "-H",
-            "Content-Type: application/xml",
+            type,
             "-X",
             "PUT",
             "-d",
@@ -88,10 +90,11 @@ class PST:
         return
 
     def createPolicy(self, appName, policyName, definitionVersion, distributionMethod="SelfService", gracePeriod="60"):
-        print("Creating Policy...")
+        print("in createPolicy")
         # Create a Patch Policy asociated to the patch ID
         if distributionMethod == "prompt":
-            tree = ET.parse("ppPromptTemplate.xml")
+            # tree = ET.parse("ppPromptTemplate.xml")
+            tree = ET.parse("/Users/jherrin/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
             root = tree.getroot()
         else:
             tree = ET.parse("ppSelfServiceTemplate.xml")
@@ -113,16 +116,17 @@ class PST:
         # xmlstr = xmlstr.replace(" ","")
         print(xmlstr)
         postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
-        header = f"authorization: {self.postHeader['authorization']}"
+        auth = f"authorization: {self.postHeader['authorization']}"
+        type = f"Content-type: {self.postHeader['Content-Type']}"
         curl_cmd = (
             self.EnvObject.curl_binary(),
             "--url",
             postURL,
             "--location",
             "-H",
-            header,
+            auth,
             "-H",
-            "Content-Type: application/xml",
+            type,
             "-X",
             "POST",
             "-d",
@@ -131,8 +135,14 @@ class PST:
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
             print("update to jamf failed")
+            return 1
         else:
             print(response)
+            return 0
+    def checkPolicyVersion(self, policyName):
+        ##Checks to see if Gamma has latest version and that definition has a pkg
+        return
+
 
     def getGeneralPolicyPkg(self):
         print("starting getGeneralPolicypkg")
@@ -155,9 +165,9 @@ class PST:
         print("leaving get General Policy pkg")
         return pkg
 
-    def policyExist(self, policyName):
+    def checkPolicyExist(self, policyName):
         ##Check if Gamma Policy
-        print("in policyExist")
+        print("in checkPolicyExist")
         print(f"Checking if PST Policy {policyName} Exists..")
         # looking for policy named gamma sorted by pst ID
         allPolicesURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
@@ -270,24 +280,30 @@ class Gamma:
         self.pst = PSTObject
         self.pkgName = self.EnvObject.env.get("applicationTitle")
         self.distributionMethod = self.EnvObject.env.get("gammaDistributionMethod")
+        self.definitionVersion = self.EnvObject.env.get("")
         print("leaving gamma init")
 
         
-    def compGammaPtch(self):
-        print("in compGammaPtch")
+    def gammaPatch(self):
+        print("in gammaPatch")
+        appName = self.pkgName
         cacheObject = Cache(self.EnvObject)
         self.pst.updatePST()
-        if not self.pst.policyExist("Gamma"):
+        if not self.pst.checkPolicyExist("Gamma"):
             print("did not find PST Policy Gamma, creating policy now.")
-            self.pst.createPolicy("Gamma")
+            self.pst.createPolicy(appName=appName, policyName="Gamma", definitionVersion=self.pst.generalPkg["version"],
+                             distributionMethod=self.distributionMethod)
+            if policyCreated != 0:
+                print("Gamma policy was not created")
+                return 1
+            else:
+                print("gamma policy created and update check can be skipped")
+                return 0
+
         # need to update policy
         # need to update cache
         # not to test Set cache?
         print("leaving compGammaPtch")
-        return
-
-    def __checkPolicyVersion():
-        ##Checks to see if Gamma has latest version and that definition has a pkg
         return
 
     def __updatePolicyVersion():
@@ -393,12 +409,8 @@ class APM(URLGetter):
             print(prod.checkDelta(self.EnvObject.env.get("productionDelay"), cache["date"]))
         else:
             print("cache load status is false so Production was skipped")
-        if not pst.policyExist("gamma"):
-            pst.createPolicy(appName=self.pkgName, policyName="Gamma", definitionVersion=generalPkg["version"],
-                             distributionMethod=self.distributionMethod)
-
         gamma = Gamma(self, pst)
-        gamma.compGammaPtch()
+        gamma.gammaPatch()
 
 
 if __name__ == "__main__":
