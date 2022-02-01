@@ -92,14 +92,19 @@ class PST:
     def createPolicy(self, appName, policyName, definitionVersion, distributionMethod="SelfService", gracePeriod="60"):
         print("in createPolicy")
         # Create a Patch Policy asociated to the patch ID
+        data = """
+        <patch_policy><general><id></id><name>Edit</name><target_version></target_version>
+        <distribution_method>self service</distribution_method><patch_unknown>true</patch_unknown>
+        </general><user_interaction><grace_period><grace_period_duration>15</grace_period_duration>
+        </grace_period></user_interaction><software_title_configuration_id>Edit
+        </software_title_configuration_id></patch_policy>
+        """
+        tree = ET.ElementTree(ET.fromstring(data))
+        root = tree.getroot()
         if distributionMethod == "prompt":
-            tree = ET.parse("ppPromptTemplate.xml")
-            # tree = ET.parse("/Users/jherrin/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
-            root = tree.getroot()
+            root.find("distribution_method").text = "prompt"
         else:
-            tree = ET.parse("ppSelfServiceTemplate.xml")
-            root = tree.getroot()
-            ### Edit XML Here
+            root.find("distribution_method").text = "self service"
             root.find("user_interaction/self_service_description").text = f"Uptdate {appName}"
             root.find("user_interaction/notifications/notification_subject").text = "Update Available"
             root.find("user_interaction/notifications/notification_message").text = f"{appName} Update Installing"
@@ -110,11 +115,10 @@ class PST:
         root.find("user_interaction/grace_period/grace_period_duration").text = gracePeriod
 
         ###
-        xmlstr = ET.tostring(root, encoding='unicode', method='xml')
-        # print(xmlstr)
-        xmlstr = xmlstr.replace("\n", "")
-        # xmlstr = xmlstr.replace(" ","")
-        print(xmlstr)
+        xmlString = ET.tostring(root, encoding='unicode', method='xml')
+        xmlString = xmlString.replace("\n", "")
+        xmlString = xmlString.replace(" ","")
+        print(xmlString)
         postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
         auth = f"authorization: {self.postHeader['authorization']}"
         type = f"Content-type: {self.postHeader['Content-Type']}"
@@ -130,7 +134,7 @@ class PST:
             "-X",
             "POST",
             "-d",
-            xmlstr
+            xmlString
         )
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
@@ -291,8 +295,9 @@ class Gamma:
         self.pst.updatePST()
         if not self.pst.checkPolicyExist("Gamma"):
             print("did not find PST Policy Gamma, creating policy now.")
-            self.pst.createPolicy(appName=appName, policyName="Gamma", definitionVersion=self.pst.generalPkg["version"],
-                             distributionMethod=self.distributionMethod)
+            policyCreated = self.pst.createPolicy(appName=appName, policyName="Gamma",
+                                                  definitionVersion=self.pst.generalPkg["version"],
+                                                  distributionMethod=self.distributionMethod)
             if policyCreated != 0:
                 print("Gamma policy was not created")
                 return 1
@@ -399,9 +404,9 @@ class APM(URLGetter):
 
     def main(self):
         print("My custom processor!") ### testing Git
-        pstCahce = Cache(self)
+        pstCache = Cache(self)
         pst = PST(self)
-        cacheLoadStatus, cache = pstCahce.getCache()
+        cacheLoadStatus, cache = pstCache.getCache()
         if cacheLoadStatus:
             print("cache load status succeeded proceeding to prodution")
             print(cache["date"])
