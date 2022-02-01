@@ -93,8 +93,8 @@ class PST:
         print("in createPolicy")
         # Create a Patch Policy asociated to the patch ID
         if distributionMethod == "prompt":
-            # tree = ET.parse("ppPromptTemplate.xml")
-            tree = ET.parse("/Users/jherrin/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
+            tree = ET.parse("ppPromptTemplate.xml")
+            # tree = ET.parse("/Users/jherrin/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
             root = tree.getroot()
         else:
             tree = ET.parse("ppSelfServiceTemplate.xml")
