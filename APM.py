@@ -15,7 +15,7 @@ __all__ = [APPNAME]
 class PST:
 
     def __init__(self, EnvObject):
-        print("starting pst init")
+        EnvObject.logger.info("Starting PST init..")
         self.EnvObject = EnvObject
         self.jamfUrl = EnvObject.env.get("JSS_URL")
         self.generalPolicyName = EnvObject.env.get("generalPolicyName")
@@ -35,31 +35,31 @@ class PST:
         self.postHeader["Content-Type"] = "application/xml"
         self.pstID = self.getPstID(self.pstName)
         self.generalPkg = self.getGeneralPolicyPkg()
-        print("leaving pst init")
+        EnvObject.logger.info("Leaving PST init.")
         pass
 
     def updatePST(self):
-        print("starting update pst")
+        self.EnvObject.logger.info("Starting update PST...")
         pstURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles/id/{self.pstID}"
         response = self.EnvObject.download(url=pstURL, headers=self.getXmlHeader)
         if not response:
-            print("get pst failed")
+            self.EnvObject.logger.error("GET PST FAILED!")
         pst = response.decode("utf-8")
         root = ET.fromstring(pst)
         for definition in root.findall("versions/version"):
             if self.generalPkg["version"] in definition.findtext("software_version"):
                 if definition.findtext("package/name"):
-                    print(
-                        f"definition already has a package {definition.findtext('package/name')}"
+                    self.EnvObject.logger.info(
+                        f"Definition already has a package {definition.findtext('package/name')}."
                     )
-                    print("leaving update Pst")
+                    self.EnvObject.logger.info("Leaving update PST.")
                     return None
                 updatePkg = definition.find("package")
                 add = ET.SubElement(updatePkg, "id")
                 add.text = str(self.generalPkg["id"])
                 add = ET.SubElement(updatePkg, "name")
                 add.text = self.generalPkg["name"]
-                print("pkg was added to definitions")
+                self.EnvObject.logger.info("Pkg was added to definitions.")
                 break
         data = ET.tostring(root)
         # header = self.postHeader
@@ -82,10 +82,10 @@ class PST:
         # print(curl_cmd)
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
-            print("update to jamf failed")
+            self.EnvObject.logger.error("UPDATE TO PST FAILED!")
         else:
-            print("update to jamf succeeded")
-        print("leaving update Pst")
+            self.EnvObject.logger.info("Update to jamf succeeded.")
+        print("Leaving update PST.")
         return
 
     def createPolicy(
@@ -96,7 +96,7 @@ class PST:
         distributionMethod="SelfService",
         gracePeriod="60",
     ):
-        print("starting createPolicy")
+        self.EnvObject.logger.info("Starting createPolicy...")
         # Create a Patch Policy asociated to the patch ID
         data = """
         <patch_policy><general><id></id><name>Edit</name><target_version></target_version>
@@ -153,14 +153,14 @@ class PST:
         )
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
-            print("update to jamf failed")
+            self.EnvObject.logger.error("UPDATE TO JAMF FAILED!")
             return 1
         else:
-            print("Policy successfully created in JAMF")
+            self.EnvObject.logger.info("Policy successfully created in JAMF.")
             return 0
 
     def checkPolicyVersion(self, policyName, definitionVersion):
-        print("starting checkPolicyVersion")
+        self.EnvObject.logger.info("Starting checkPolicyVersion...")
         check = {}
         # checking to see if this policy has the right version
         allPolicesURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
@@ -183,21 +183,21 @@ class PST:
                 if definitionVersion == str(
                     gammaPolicy["patch_policy"]["general"]["target_version"]
                 ):
-                    print("policy has the correct version")
+                    self.EnvObject.logger.info("Policy has the correct version.")
                     check["status"] = True
                 else:
-                    print("policy has old version")
+                    self.EnvObject.logger.info("Policy has old version.")
                     check["status"] = False
                 check["version"] = definitionVersion
                 check["policyID"] = policyID
-                print("Leaving checkPolicyVersion")
+                self.EnvObject.logger.info("Leaving checkPolicyVersion.")
                 return check
-        print(f"Could not find policy {policyName} in PST {self.pstName}")
-        print("Leaving checkPolicyVersion")
+        self.EnvObject.logger.info(f"Could not find policy {policyName} in PST {self.pstName}.")
+        self.EnvObject.logger.info("Leaving checkPolicyVersion.")
         return 1
 
     def updatePolicyVersion(self, policyID, definitionVersion):
-        print("starting updatePolicyVersion")
+        self.EnvObject.logger.info("Starting updatePolicyVersion...")
         xmlString = (
             f"<patch_policy><general><target_version>{definitionVersion}"
             f"</target_version></general></patch_policy>"
@@ -221,17 +221,17 @@ class PST:
         )
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
-            print("update to jamf failed")
-            print("Leaving updatePolicyVersion")
+            self.EnvObject.logger.ERROR("UPDATE TO JAMF FAILED!")
+            self.EnvObject.logger.info("Leaving updatePolicyVersion.")
             return 1
         else:
             # print(response)
-            print(f"updated policy to version {definitionVersion}")
-            print("Leaving updatePolicyVersion")
+            self.EnvObject.logger.info(f"Updated policy to version {definitionVersion}.")
+            self.EnvObject.logger.info("Leaving updatePolicyVersion.")
             return 0
 
     def getGeneralPolicyPkg(self):
-        print("starting getGeneralPolicypkg")
+        self.EnvObject.logger.info("Starting getGeneralPolicypkg...")
         generalPolicyURL = (
             f"{self.jamfUrl}/JSSResource/policies/name/{self.generalPolicyName}"
         )
@@ -239,13 +239,13 @@ class PST:
             url=generalPolicyURL, headers=self.getJsonHeader
         )
         if not response:
-            print("unable to get response from get general policy")
+            self.EnvObject.logger.ERROR("UNABLE TO GET RESPONSE FROM GENERAL POLICY!")
         decodedResponse = response.decode("utf-8")
         generalPolicy = json.loads(decodedResponse)
         pkgCount = len(generalPolicy["policy"]["package_configuration"]["packages"])
         if pkgCount != 1:
-            print(
-                f"the amount of packages in {self.generalPolicyName} needs to only be 1 pkg"
+            self.EnvObject.logger.info(
+                f"The amount of packages in {self.generalPolicyName} needs to only be 1 pkg."
             )
             return
         pkg = {}
@@ -257,16 +257,16 @@ class PST:
         ]
         pkg["appName"] = pkg["name"].split("-", -1)[0]
         pkg["version"], pkg["type"] = (pkg["name"].rsplit("-", 1)[1]).rsplit(".", 1)
-        print(
-            f"returning {pkg['appName']} with type {pkg['type']} and version {pkg['version']}"
+        self.EnvObject.logger.info(
+            f"Returning {pkg['appName']} with type {pkg['type']} and version {pkg['version']}."
         )
-        print("leaving get General Policy pkg")
+        self.EnvObject.logger.info("Leaving get General Policy pkg.")
         return pkg
 
     def checkPolicyExist(self, policyName):
         ##Check if Gamma Policy
-        print("starting checkPolicyExist")
-        print(f"Checking if PST Policy {policyName} Exists..")
+        self.EnvObject.logger.info("Starting checkPolicyExist...")
+        self.EnvObject.logger.info(f"Checking if PST Policy {policyName} Exists...")
         # looking for policy named gamma sorted by pst ID
         allPolicesURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
         response = self.EnvObject.download(
@@ -278,34 +278,34 @@ class PST:
         for policy in allPolicies["patch policies"]:
             if policyName.lower() == policy["name"].lower():
                 policyID = str(policy["id"])
-                print(f"Found gamma policy with ID of {policyID}")
-                print("Leaving policy Exist")
+                self.EnvObject.logger.info(f"Found gamma policy with ID of {policyID}.")
+                self.EnvObject.logger.info("Leaving checkPolicyExists.")
                 return True
-        print(f"Cound not find policy {policyName} in PST {self.pstName}")
-        print("Leaving policy Exist")
+        self.EnvObject.logger.info(f"Cound not find policy {policyName} in PST {self.pstName}.")
+        self.EnvObject.logger.info("Leaving checkPolicyExists.")
         return False
 
     def getPstID(self, pstTitle):
-        print("starting getPstId")
+        self.EnvObject.logger.info("Starting getPstId...")
         allPatchesURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles"
         # print(self.getJsonHeader)
         response = self.EnvObject.download(
             url=allPatchesURL, headers=self.getJsonHeader
         )
         if not response:
-            print("we were unable to get the response from the getPstID")
+            self.EnvObject.logger.info("UNABLE TO GET RESPONSE FROM PSTID!")
             return 0
         decodedResponse = response.decode("utf-8")
         softwareTitles = json.loads(decodedResponse)
         for pst in softwareTitles["patch_software_titles"]:
             if pstTitle == pst["name"]:
                 pstID = str(pst["id"])
-                print(f"Found pst with ID of {pstID}")
-                print("leaving getPstId")
+                self.EnvObject.logger.info(f"Found pst with ID of {pstID}.")
+                self.EnvObject.logger.info("Leaving getPstId.")
                 return pstID
-        print(
-            f"Cound not find patch with name: {pstTitle}\n"
-            f"Please create the patch or confirm it's correct name before retrying script"
+        self.EnvObject.logger.info(
+            f"Cound not find patch with name: {pstTitle}.\n"
+            f"Please create the patch or confirm it's correct name before retrying script."
         )
         return False
 
@@ -373,23 +373,23 @@ class Cache:
 class Gamma:
 
     def __init__(self, EnvObject, PSTObject):
-        print("starting gamma init")
+        EnvObject.logger.info("Starting Gamma init...")
         ##Constructor(initializer) that activates when an object is created
         self.EnvObject = EnvObject
         self.pst = PSTObject
         self.pkgName = EnvObject.env.get("applicationTitle")
         self.distributionMethod = EnvObject.env.get("gammaDistributionMethod")
-        print("leaving gamma init")
+        EnvObject.logger.info("Leaving Gamma init.")
 
     def gammaPatch(self):
-        print("starting gammaPatch")
+        self.EnvObject.logger.info("Starting gammaPatch...")
         appName = self.pkgName
         policyName = "Gamma"
         gammaCache = Cache(self.EnvObject)
         cache = gammaCache.get()
         self.pst.updatePST()
         if not self.pst.checkPolicyExist("Gamma"):
-            print("did not find PST Policy Gamma, creating policy now.")
+            self.EnvObject.logger.info("Did not find PST Policy Gamma, creating policy now...")
             policyCreated = self.pst.createPolicy(
                 appName=appName,
                 policyName=policyName,
@@ -397,10 +397,10 @@ class Gamma:
                 distributionMethod=self.distributionMethod
             )
             if policyCreated != 0:
-                print("Gamma policy was not created")
+                self.EnvObject.logger.error("GAMMA POLICY WAS NOT CREATED!")
                 return 1
             else:
-                print("gamma policy created and update check can be skipped")
+                self.EnvObject.logger.info("Gamma policy created and update check can be skipped.")
                 gammaCache.set(
                     version=self.pst.generalPkg["version"],
                     packageName=self.pst.generalPkg["name"],
@@ -416,7 +416,7 @@ class Gamma:
                 definitionVersion=self.pst.generalPkg["version"],
             )
             if updateComplete != 0:
-                print("policy update failed")
+                self.EnvObject.logger.error("POLICY UPDATE FAILED!")
                 return 1
         if cache["version"] != self.pst.generalPkg["version"]:
             gammaCache.set(
@@ -426,28 +426,28 @@ class Gamma:
                 gammaPolicyID=check["policyID"],
             )
         # not to test Set cache?
-        print("leaving gammaPatch")
+        self.EnvObject.logger.info("Leaving gammaPatch.")
         return 0
 
 
 class Prod:
 
     def __init__(self, EnvObject, PSTObject, cache):
-        print("starting prod init")
+        EnvObject.logger.info("Starting Prod init...")
         ##Constructor(initializer) that activates when an object is created
         self.EnvObject = EnvObject
         self.pst = PSTObject
         self.distributionMethod = self.EnvObject.env.get("prodDistributionMethod")
         self.cacheVersion = cache["version"]
         self.appName = cache["name"]
-        print("leaving prod init")
+        EnvObject.logger.info("Leaving Prod init.")
 
     def prodPatch(self):
-        print("starting prodPatch")
+        self.EnvObject.logger.info("Starting prodPatch...")
         ##Function that holds the logic to move policy to production
         policyName = "Production"
         if not self.pst.checkPolicyExist("Production"):
-            print("did not find PST Policy Production, creating policy now.")
+            self.EnvObject.logger.info("Did not find PST Policy Production, creating policy now...")
             policyCreated = self.pst.createPolicy(
                 appName=self.appName,
                 policyName=policyName,
@@ -455,10 +455,10 @@ class Prod:
                 distributionMethod=self.distributionMethod,
             )
             if policyCreated != 0:
-                print("Gamma policy was not created")
+                self.EnvObject.logger.error("PROD POLICY WAS NOT CREATED!")
                 return 1
             else:
-                print("gamma policy created and update check can be skipped")
+                self.EnvObject.logger.info("Prod policy created and update check can be skipped.")
                 return 0
         check = self.pst.checkPolicyVersion(
             policyName=policyName, definitionVersion=self.cacheVersion
@@ -468,9 +468,9 @@ class Prod:
                 policyID=check["policyID"], definitionVersion=self.cacheVersion
             )
             if updateComplete != 0:
-                print("policy update failed")
+                self.EnvObject.logger.error("POLICY UPDATED FAILED!")
                 return 1
-        print("leaving prodPatch")
+        print("Leaving prodPatch.")
         return 0
 
 
@@ -513,8 +513,12 @@ class APM(URLGetter):
 
     def setup_logging(self):
         """Defines a nicely formatted logger"""
-        LOGFILE = "/usr/local/var/log/%s.log" % APPNAME
-
+        cachePath = self.env.get("RECIPE_CACHE_DIR")
+        application = self.env.get("applicationTitle")
+        LOGFILE = f"{cachePath}/{application}.log"
+        if not os.path.exists(LOGFILE):
+            with open(LOGFILE, "w") as outfile:
+                pass
         self.logger = logging.getLogger(APPNAME)
         # we may be the second and subsequent iterations of JPCImporter
         # and already have a handler.
@@ -533,24 +537,25 @@ class APM(URLGetter):
         self.logger.setLevel(LOGLEVEL)
 
     def main(self):
-        print("Starting APM main")
+        self.setup_logging()
+        self.logger.info("Starting APM main")
         mainCache = Cache(self)
         pst = PST(self)
         cache = mainCache.get()
         if cache["version"] != "":
-            print("cache load version successful, checking delta")
+            self.logger.info("Cache load version successful, checking delta...")
             deltaInSeconds = 60 * 60 * 24 * int(self.env.get("productionDelay"))
             if time.time() + deltaInSeconds < cache["date"]:
-                print("delta time has elapsed running prod")
+                self.logger.info("Delta time has elapsed running prod...")
                 prod = Prod(self, pst, cache)
                 prod.prodPatch()
             else:
-                print("production Delay time has not been met, skipping production")
+                self.logger.info("Production Delay time has not been met, skipping production.")
         else:
-            print("cached version is empty so Production was skipped")
+            self.logger.info("Cached version is empty so Production was skipped.")
         gamma = Gamma(self, pst)
         gamma.gammaPatch()
-        print("leaving APM main")
+        self.logger.info("Leaving APM main.")
 
 
 if __name__ == "__main__":
