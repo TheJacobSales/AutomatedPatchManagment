@@ -505,7 +505,7 @@ class APM(URLGetter):
         self.logger.setLevel(LOGLEVEL)
 
     def main(self):
-        print("My custom processor!")  ### testing Git
+        print("Starting APM main")
         mainCache = Cache(self)
         pst = PST(self)
         cache = mainCache.get()
@@ -522,6 +522,7 @@ class APM(URLGetter):
             print("cached version is empty so Production was skipped")
         gamma = Gamma(self, pst)
         gamma.gammaPatch()
+        print("leaving APM main")
 
 
 if __name__ == "__main__":
