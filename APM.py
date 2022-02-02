@@ -36,6 +36,7 @@ class PST:
         self.pstID = self.getPstID(self.pstName)
         self.generalPolicyName = self.EnvObject.env.get("generalPolicyName")
         self.generalPkg = self.getGeneralPolicyPkg()
+        print("Finished pst init")
         pass
 
     def updatePST(self):
@@ -93,7 +94,7 @@ class PST:
         print("in createPolicy")
         # Create a Patch Policy asociated to the patch ID
         if distributionMethod == "prompt":
-            tree = ET.parse("ppPromptTemplate.xml")
+            tree = ET.parse("/Users/jsales/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
             # tree = ET.parse("/Users/jherrin/Library/AutoPkg/Recipes/AutomatedPatchManagement/ppPromptTemplate.xml")
             root = tree.getroot()
         else:
@@ -190,6 +191,7 @@ class PST:
         allPatchesURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles"
         # print(self.getJsonHeader)
         response = self.EnvObject.download(url=allPatchesURL, headers=self.getJsonHeader)
+        print("Ping")
         # print(response)
         if not response:
             print("we were unable to get the response from the getPstID")
@@ -293,7 +295,7 @@ class Gamma:
             print("did not find PST Policy Gamma, creating policy now.")
             self.pst.createPolicy(appName=appName, policyName="Gamma", definitionVersion=self.pst.generalPkg["version"],
                              distributionMethod=self.distributionMethod)
-            if policyCreated != 0:
+            if not self.pst.checkPolicyExist("Gamma"):
                 print("Gamma policy was not created")
                 return 1
             else:
@@ -399,9 +401,9 @@ class APM(URLGetter):
 
     def main(self):
         print("My custom processor!") ### testing Git
-        pstCahce = Cache(self)
+        pstCache = Cache(self)
         pst = PST(self)
-        cacheLoadStatus, cache = pstCahce.getCache()
+        cacheLoadStatus, cache = pstCache.getCache()
         if cacheLoadStatus:
             print("cache load status succeeded proceeding to prodution")
             print(cache["date"])
