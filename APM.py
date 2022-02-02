@@ -13,7 +13,6 @@ __all__ = [APPNAME]
 
 
 class PST:
-
     def __init__(self, EnvObject):
         EnvObject.logger.info("Starting PST init..")
         self.EnvObject = EnvObject
@@ -192,7 +191,9 @@ class PST:
                 check["policyID"] = policyID
                 self.EnvObject.logger.info("Leaving checkPolicyVersion.")
                 return check
-        self.EnvObject.logger.info(f"Could not find policy {policyName} in PST {self.pstName}.")
+        self.EnvObject.logger.info(
+            f"Could not find policy {policyName} in PST {self.pstName}."
+        )
         self.EnvObject.logger.info("Leaving checkPolicyVersion.")
         return 1
 
@@ -226,7 +227,9 @@ class PST:
             return 1
         else:
             # print(response)
-            self.EnvObject.logger.info(f"Updated policy to version {definitionVersion}.")
+            self.EnvObject.logger.info(
+                f"Updated policy to version {definitionVersion}."
+            )
             self.EnvObject.logger.info("Leaving updatePolicyVersion.")
             return 0
 
@@ -281,7 +284,9 @@ class PST:
                 self.EnvObject.logger.info(f"Found gamma policy with ID of {policyID}.")
                 self.EnvObject.logger.info("Leaving checkPolicyExists.")
                 return True
-        self.EnvObject.logger.info(f"Cound not find policy {policyName} in PST {self.pstName}.")
+        self.EnvObject.logger.info(
+            f"Cound not find policy {policyName} in PST {self.pstName}."
+        )
         self.EnvObject.logger.info("Leaving checkPolicyExists.")
         return False
 
@@ -311,12 +316,13 @@ class PST:
 
 
 class Cache:
-
     def __init__(self, processor):
         # Create cache for version control if it doesn't exist
         print("starting cache init")
         self.cacheAPMPath = processor.env.get("RECIPE_CACHE_DIR") + "/APM.json"
-        if not os.path.exists(self.cacheAPMPath) or not os.path.getsize(self.cacheAPMPath):
+        if not os.path.exists(self.cacheAPMPath) or not os.path.getsize(
+            self.cacheAPMPath
+        ):
             data = {
                 "version": "",
                 "date": time.time(),
@@ -371,7 +377,6 @@ class Cache:
 
 
 class Gamma:
-
     def __init__(self, EnvObject, PSTObject):
         EnvObject.logger.info("Starting Gamma init...")
         ##Constructor(initializer) that activates when an object is created
@@ -389,22 +394,26 @@ class Gamma:
         cache = gammaCache.get()
         self.pst.updatePST()
         if not self.pst.checkPolicyExist("Gamma"):
-            self.EnvObject.logger.info("Did not find PST Policy Gamma, creating policy now...")
+            self.EnvObject.logger.info(
+                "Did not find PST Policy Gamma, creating policy now..."
+            )
             policyCreated = self.pst.createPolicy(
                 appName=appName,
                 policyName=policyName,
                 definitionVersion=self.pst.generalPkg["version"],
-                distributionMethod=self.distributionMethod
+                distributionMethod=self.distributionMethod,
             )
             if policyCreated != 0:
                 self.EnvObject.logger.error("GAMMA POLICY WAS NOT CREATED!")
                 return 1
             else:
-                self.EnvObject.logger.info("Gamma policy created and update check can be skipped.")
+                self.EnvObject.logger.info(
+                    "Gamma policy created and update check can be skipped."
+                )
                 gammaCache.set(
                     version=self.pst.generalPkg["version"],
                     packageName=self.pst.generalPkg["name"],
-                    name=self.pst.pstName
+                    name=self.pst.pstName,
                 )
                 return 0
         check = self.pst.checkPolicyVersion(
@@ -431,7 +440,6 @@ class Gamma:
 
 
 class Prod:
-
     def __init__(self, EnvObject, PSTObject, cache):
         EnvObject.logger.info("Starting Prod init...")
         ##Constructor(initializer) that activates when an object is created
@@ -447,7 +455,9 @@ class Prod:
         ##Function that holds the logic to move policy to production
         policyName = "Production"
         if not self.pst.checkPolicyExist("Production"):
-            self.EnvObject.logger.info("Did not find PST Policy Production, creating policy now...")
+            self.EnvObject.logger.info(
+                "Did not find PST Policy Production, creating policy now..."
+            )
             policyCreated = self.pst.createPolicy(
                 appName=self.appName,
                 policyName=policyName,
@@ -458,7 +468,9 @@ class Prod:
                 self.EnvObject.logger.error("PROD POLICY WAS NOT CREATED!")
                 return 1
             else:
-                self.EnvObject.logger.info("Prod policy created and update check can be skipped.")
+                self.EnvObject.logger.info(
+                    "Prod policy created and update check can be skipped."
+                )
                 return 0
         check = self.pst.checkPolicyVersion(
             policyName=policyName, definitionVersion=self.cacheVersion
@@ -550,7 +562,9 @@ class APM(URLGetter):
                 prod = Prod(self, pst, cache)
                 prod.prodPatch()
             else:
-                self.logger.info("Production Delay time has not been met, skipping production.")
+                self.logger.info(
+                    "Production Delay time has not been met, skipping production."
+                )
         else:
             self.logger.info("Cached version is empty so Production was skipped.")
         gamma = Gamma(self, pst)
