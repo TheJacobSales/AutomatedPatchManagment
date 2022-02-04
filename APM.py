@@ -46,9 +46,17 @@ class PST:
             self.EnvObject.logger.error("GET PST FAILED!")
         pst = response.decode("utf-8")
         root = ET.fromstring(pst)
+        self.EnvObject.logger.info(self.generalPkg["version"])
         for definition in root.findall("versions/version"):
-            if self.generalPkg["version"] in definition.findtext("software_version"):
-                self.EnvObject.logger.info(f"print general package version {self.generalPkg['version']}")
+            pstVersion = definition.findtext("software_version").split("(", -1)[0].strip()
+            self.EnvObject.logger.info(pstVersion)
+            if pstVersion in self.generalPkg["version"]:
+                self.EnvObject.logger.info(f"found general package version {self.generalPkg['version']}")
+                # this checks to see if the definitions are exactly the same, if not at this point we will
+                # use the definition from JAMF
+                if self.generalPkg["version"] != definition.findtext("software_version"):
+                    self.generalPkg["version"] = definition.findtext("software_version")
+                    self.EnvObject.logger.info(f"self.generalpkg version was updated to {self.generalPkg['version']}")
                 if definition.findtext("package/name"):
                     self.EnvObject.logger.info(
                         f"Definition already has a package {definition.findtext('package/name')}."
@@ -62,6 +70,10 @@ class PST:
                 add.text = self.generalPkg["name"]
                 self.EnvObject.logger.info("Pkg was added to definitions.")
                 break
+        if updatePkg is None:
+            self.EnvObject.logger.info("Pkg was not found in definition Error.")
+            sys.exit()
+
         data = ET.tostring(root)
         # header = self.postHeader
         auth = f"authorization: {self.postHeader['authorization']}"
@@ -86,7 +98,7 @@ class PST:
             self.EnvObject.logger.error("UPDATE TO PST FAILED!")
         else:
             self.EnvObject.logger.info("Update to jamf succeeded.")
-        print("Leaving update PST.")
+            self.EnvObject.logger.info("Leaving update PST.")
         return
 
     def createPolicy(
