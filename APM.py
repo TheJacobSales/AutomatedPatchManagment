@@ -4,6 +4,7 @@ import json
 import urllib3
 import xml.etree.ElementTree as ET
 import time
+import sys
 from autopkglib import Processor, ProcessorError, URLGetter
 
 APPNAME = "APM"
@@ -47,6 +48,7 @@ class PST:
         root = ET.fromstring(pst)
         for definition in root.findall("versions/version"):
             if self.generalPkg["version"] in definition.findtext("software_version"):
+                self.EnvObject.logger.info(f"print general package version {self.generalPkg['version']}")
                 if definition.findtext("package/name"):
                     self.EnvObject.logger.info(
                         f"Definition already has a package {definition.findtext('package/name')}."
@@ -130,9 +132,6 @@ class PST:
         ).text = gracePeriod
         xmlString = ET.tostring(root, encoding="unicode", method="xml")
         xmlString = xmlString.replace("\n", "")
-        # leaving this out since it makes the notifications look bad and xml doesnt care
-        # xmlString = xmlString.replace(" ","")
-        # print(xmlString)
         postURL = f"{self.jamfUrl}/JSSResource/patchpolicies/softwaretitleconfig/id/{self.pstID}"
         auth = f"authorization: {self.postHeader['authorization']}"
         type = f"Content-type: {self.postHeader['Content-Type']}"
@@ -243,23 +242,41 @@ class PST:
         )
         if not response:
             self.EnvObject.logger.ERROR("UNABLE TO GET RESPONSE FROM GENERAL POLICY!")
-        decodedResponse = response.decode("utf-8")
-        generalPolicy = json.loads(decodedResponse)
+        try:
+            decodedResponse = response.decode("utf-8")
+            generalPolicy = json.loads(decodedResponse)
+        except ValueError:
+            self.EnvObject.logger.info(f"FAILED TO PARSE RESPONSE FROM GENERAL POLICY! {self.generalPolicyName}")
+            self.EnvObject.logger.info("Leaving updatePolicyVersion.")
+            sys.exit()
+        # Trying to make it so that multiple packages can exist in the policy
+        # if pkgCount != 1:
+        #     self.EnvObject.logger.info(
+        #         f"The amount of packages in {self.generalPolicyName} needs to only be 1 pkg."
+        #     )
+        #     return
         pkgCount = len(generalPolicy["policy"]["package_configuration"]["packages"])
         if pkgCount != 1:
-            self.EnvObject.logger.info(
-                f"The amount of packages in {self.generalPolicyName} needs to only be 1 pkg."
-            )
-            return
+            for package in generalPolicy["policy"]["package_configuration"]["packages"]:
+                if self.EnvObject.env.get("applicationTitle") in package['name']:
+                    foundPackage = package
+                    self.EnvObject.logger.info(
+                        f"package {package['name']} found and using for version info")
+                    break
+                else:
+                    self.EnvObject.logger.ERROR(f"UNABLE TO FIND {self.EnvObject.env.get('applicationTitle')} "
+                                                f"IN GENERAL POLICY PACKAGES")
+        else:
+            foundPackage = generalPolicy["policy"]["package_configuration"]["packages"][0]
+        if "_" in foundPackage["name"]:
+            delineator = "_"
+        elif "-" in foundPackage["name"]:
+            delineator = "-"
         pkg = {}
-        pkg["name"] = generalPolicy["policy"]["package_configuration"]["packages"][0][
-            "name"
-        ]
-        pkg["id"] = generalPolicy["policy"]["package_configuration"]["packages"][0][
-            "id"
-        ]
-        pkg["appName"] = pkg["name"].split("-", -1)[0]
-        pkg["version"], pkg["type"] = (pkg["name"].rsplit("-", 1)[1]).rsplit(".", 1)
+        pkg["name"] = foundPackage["name"]
+        pkg["id"] = foundPackage["id"]
+        pkg["appName"] = pkg["name"].split(delineator, -1)[0]
+        pkg["version"], pkg["type"] = (pkg["name"].rsplit(delineator, 1)[1]).rsplit(".", 1)
         self.EnvObject.logger.info(
             f"Returning {pkg['appName']} with type {pkg['type']} and version {pkg['version']}."
         )
@@ -340,10 +357,6 @@ class Cache:
     def get(self):
         print("starting Cache get")
         ##Returns Version, Date of Last Patch Update using the policyID
-
-        # version, date, packageName, name, gammaPolicyID, prodPolicyID = "new"
-        # when i run the script whith the above I get the following error fsfollow.vlc.apm
-        # Error in local.APM.VLC.FSFollow: Processor: APM: Error: not enough values to unpack (expected 6, got 3)
         with open(self.cacheAPMPath, "r") as inFile:
             data = json.load(inFile)
         print("Cache opened.")
@@ -482,7 +495,7 @@ class Prod:
             if updateComplete != 0:
                 self.EnvObject.logger.error("POLICY UPDATED FAILED!")
                 return 1
-        print("Leaving prodPatch.")
+        self.EnvObject.logger.info("Leaving prodPatch.")
         return 0
 
 
