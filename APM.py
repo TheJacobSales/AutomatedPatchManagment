@@ -293,10 +293,11 @@ class PST:
     def getPstID(self, pstTitle):
         self.EnvObject.logger.info("Starting getPstId...")
         allPatchesURL = f"{self.jamfUrl}/JSSResource/patchsoftwaretitles"
-        # print(self.getJsonHeader)
+        # self.EnvObject.logger.info(allPatchesURL)
         response = self.EnvObject.download(
             url=allPatchesURL, headers=self.getJsonHeader
         )
+        # self.EnvObject.logger.info(response)
         if not response:
             self.EnvObject.logger.info("UNABLE TO GET RESPONSE FROM PSTID!")
             return 0
@@ -318,7 +319,8 @@ class PST:
 class Cache:
     def __init__(self, processor):
         # Create cache for version control if it doesn't exist
-        print("starting cache init")
+        self.EnvObject = processor
+        processor.logger.info("starting cache init")
         self.cacheAPMPath = processor.env.get("RECIPE_CACHE_DIR") + "/APM.json"
         if not os.path.exists(self.cacheAPMPath) or not os.path.getsize(
             self.cacheAPMPath
@@ -335,10 +337,10 @@ class Cache:
             # print(data)
             with open(self.cacheAPMPath, "w") as outfile:
                 json.dump(data, outfile)
-        print("leaving cache init")
+        processor.logger.info("leaving cache init")
 
     def get(self):
-        print("starting Cache get")
+        self.EnvObject.logger.info("starting Cache get")
         ##Returns Version, Date of Last Patch Update using the policyID
 
         # version, date, packageName, name, gammaPolicyID, prodPolicyID = "new"
@@ -346,8 +348,8 @@ class Cache:
         # Error in local.APM.VLC.FSFollow: Processor: APM: Error: not enough values to unpack (expected 6, got 3)
         with open(self.cacheAPMPath, "r") as inFile:
             data = json.load(inFile)
-        print("Cache opened.")
-        print("leaving Cache get")
+        self.EnvObject.logger.info("Cache opened.")
+        self.EnvObject.logger.info("leaving Cache get")
         return {
             "version": data["version"],
             "date": data["date"],
@@ -358,7 +360,7 @@ class Cache:
         }
 
     def set(self, version, packageName, name, gammaPolicyID=0, prodPolicyID=0):
-        print("starting cache set")
+        self.EnvObject.logger.info("starting cache set")
         ##updates cache version, policyID, and Date of Last Patch Update
         with open(self.cacheAPMPath, "r") as inFile:
             data = json.load(inFile)
@@ -372,7 +374,7 @@ class Cache:
             data["prodPolicyID"] = prodPolicyID
         with open(self.cacheAPMPath, "w", encoding="utf-8") as newFile:
             json.dump(data, newFile, ensure_ascii=False, indent=4)
-        print("leaving cache set")
+        self.EnvObject.logger.info("leaving cache set")
         return
 
 
@@ -387,6 +389,7 @@ class Gamma:
         EnvObject.logger.info("Leaving Gamma init.")
 
     def gammaPatch(self):
+        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         self.EnvObject.logger.info("Starting gammaPatch...")
         appName = self.pkgName
         policyName = "Gamma"
@@ -436,6 +439,7 @@ class Gamma:
             )
         # not to test Set cache?
         self.EnvObject.logger.info("Leaving gammaPatch.")
+        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         return 0
 
 
@@ -451,6 +455,7 @@ class Prod:
         EnvObject.logger.info("Leaving Prod init.")
 
     def prodPatch(self):
+        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         self.EnvObject.logger.info("Starting prodPatch...")
         ##Function that holds the logic to move policy to production
         policyName = "Production"
@@ -483,6 +488,7 @@ class Prod:
                 self.EnvObject.logger.error("POLICY UPDATED FAILED!")
                 return 1
         print("Leaving prodPatch.")
+        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         return 0
 
 
@@ -550,7 +556,8 @@ class APM(URLGetter):
 
     def main(self):
         self.setup_logging()
-        self.logger.info("Starting APM main")
+        self.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        self.logger.info("Starting APM main...")
         mainCache = Cache(self)
         pst = PST(self)
         cache = mainCache.get()
@@ -570,6 +577,7 @@ class APM(URLGetter):
         gamma = Gamma(self, pst)
         gamma.gammaPatch()
         self.logger.info("Leaving APM main.")
+        self.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 
 if __name__ == "__main__":
