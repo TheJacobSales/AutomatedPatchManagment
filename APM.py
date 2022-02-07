@@ -48,15 +48,23 @@ class PST:
         root = ET.fromstring(pst)
         self.EnvObject.logger.info(self.generalPkg["version"])
         for definition in root.findall("versions/version"):
-            pstVersion = definition.findtext("software_version").split("(", -1)[0].strip()
+            pstVersion = (
+                definition.findtext("software_version").split("(", -1)[0].strip()
+            )
             self.EnvObject.logger.info(pstVersion)
             if pstVersion in self.generalPkg["version"]:
-                self.EnvObject.logger.info(f"found general package version {self.generalPkg['version']}")
+                self.EnvObject.logger.info(
+                    f"found general package version {self.generalPkg['version']}"
+                )
                 # this checks to see if the definitions are exactly the same, if not at this point we will
                 # use the definition from JAMF
-                if self.generalPkg["version"] != definition.findtext("software_version"):
+                if self.generalPkg["version"] != definition.findtext(
+                    "software_version"
+                ):
                     self.generalPkg["version"] = definition.findtext("software_version")
-                    self.EnvObject.logger.info(f"self.generalpkg version was updated to {self.generalPkg['version']}")
+                    self.EnvObject.logger.info(
+                        f"self.generalpkg version was updated to {self.generalPkg['version']}"
+                    )
                 if definition.findtext("package/name"):
                     self.EnvObject.logger.info(
                         f"Definition already has a package {definition.findtext('package/name')}."
@@ -258,7 +266,9 @@ class PST:
             decodedResponse = response.decode("utf-8")
             generalPolicy = json.loads(decodedResponse)
         except ValueError:
-            self.EnvObject.logger.info(f"FAILED TO PARSE RESPONSE FROM GENERAL POLICY! {self.generalPolicyName}")
+            self.EnvObject.logger.info(
+                f"FAILED TO PARSE RESPONSE FROM GENERAL POLICY! {self.generalPolicyName}"
+            )
             self.EnvObject.logger.info("Leaving updatePolicyVersion.")
             sys.exit()
         # Trying to make it so that multiple packages can exist in the policy
@@ -270,16 +280,21 @@ class PST:
         pkgCount = len(generalPolicy["policy"]["package_configuration"]["packages"])
         if pkgCount != 1:
             for package in generalPolicy["policy"]["package_configuration"]["packages"]:
-                if self.EnvObject.env.get("applicationTitle") in package['name']:
+                if self.EnvObject.env.get("applicationTitle") in package["name"]:
                     foundPackage = package
                     self.EnvObject.logger.info(
-                        f"package {package['name']} found and using for version info")
+                        f"package {package['name']} found and using for version info"
+                    )
                     break
                 else:
-                    self.EnvObject.logger.ERROR(f"UNABLE TO FIND {self.EnvObject.env.get('applicationTitle')} "
-                                                f"IN GENERAL POLICY PACKAGES")
+                    self.EnvObject.logger.ERROR(
+                        f"UNABLE TO FIND {self.EnvObject.env.get('applicationTitle')} "
+                        f"IN GENERAL POLICY PACKAGES"
+                    )
         else:
-            foundPackage = generalPolicy["policy"]["package_configuration"]["packages"][0]
+            foundPackage = generalPolicy["policy"]["package_configuration"]["packages"][
+                0
+            ]
         if "_" in foundPackage["name"]:
             delineator = "_"
         elif "-" in foundPackage["name"]:
@@ -288,7 +303,9 @@ class PST:
         pkg["name"] = foundPackage["name"]
         pkg["id"] = foundPackage["id"]
         pkg["appName"] = pkg["name"].split(delineator, -1)[0]
-        pkg["version"], pkg["type"] = (pkg["name"].rsplit(delineator, 1)[1]).rsplit(".", 1)
+        pkg["version"], pkg["type"] = (pkg["name"].rsplit(delineator, 1)[1]).rsplit(
+            ".", 1
+        )
         self.EnvObject.logger.info(
             f"Returning {pkg['appName']} with type {pkg['type']} and version {pkg['version']}."
         )
@@ -414,7 +431,9 @@ class Gamma:
         EnvObject.logger.info("Leaving Gamma init.")
 
     def gammaPatch(self):
-        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        self.EnvObject.logger.info(
+            "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        )
         self.EnvObject.logger.info("Starting gammaPatch...")
         appName = self.pkgName
         policyName = "Gamma"
@@ -443,6 +462,24 @@ class Gamma:
                     packageName=self.pst.generalPkg["name"],
                     name=self.pst.pstName,
                 )
+                self.EnvObject.env["gamma_policy_summary_result"] = {
+                    "summary_text": "The following Gamma policy was created:",
+                    "report_fields": ["app_name", "policy_name", "version"],
+                    "data": {
+                        "app_name": appName,
+                        "policy_name": policyName,
+                        "version": self.pst.generalPkg["version"],
+                    },
+                }
+                self.EnvObject.env["cache_summary_result"] = {
+                    "summary_text": "The cache was updated with the following values:",
+                    "report_fields": ["name", "package_name", "version"],
+                    "data": {
+                        "name": self.pst.pstName,
+                        "package_name": self.pst.generalPkg["name"],
+                        "version": self.pst.generalPkg["version"],
+                    },
+                }
                 return 0
         check = self.pst.checkPolicyVersion(
             policyName=policyName, definitionVersion=self.pst.generalPkg["version"]
@@ -452,6 +489,15 @@ class Gamma:
                 policyID=check["policyID"],
                 definitionVersion=self.pst.generalPkg["version"],
             )
+            self.EnvObject.env["gamma_policy_summary_result"] = {
+                "summary_text": "The following Gamma policy was created:",
+                "report_fields": ["app_name", "policy_name", "version"],
+                "data": {
+                    "app_name": appName,
+                    "policy_name": policyName,
+                    "version": self.pst.generalPkg["version"],
+                },
+            }
             if updateComplete != 0:
                 self.EnvObject.logger.error("POLICY UPDATE FAILED!")
                 return 1
@@ -462,9 +508,21 @@ class Gamma:
                 name=self.pst.pstName,
                 gammaPolicyID=check["policyID"],
             )
+            self.EnvObject.env["cache_summary_result"] = {
+                "summary_text": "The cache was updated with the following values:",
+                "report_fields": ["name", "package_name", "version", "gamma_policy_id"],
+                "data": {
+                    "name": self.pst.pstName,
+                    "package_name": self.pst.generalPkg["name"],
+                    "version": self.pst.generalPkg["version"],
+                    "gamma_policy_id": check["policyID"],
+                },
+            }
         # not to test Set cache?
         self.EnvObject.logger.info("Leaving gammaPatch.")
-        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        self.EnvObject.logger.info(
+            "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        )
         return 0
 
 
@@ -480,7 +538,9 @@ class Prod:
         EnvObject.logger.info("Leaving Prod init.")
 
     def prodPatch(self):
-        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        self.EnvObject.logger.info(
+            "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        )
         self.EnvObject.logger.info("Starting prodPatch...")
         ##Function that holds the logic to move policy to production
         policyName = "Production"
@@ -501,6 +561,15 @@ class Prod:
                 self.EnvObject.logger.info(
                     "Prod policy created and update check can be skipped."
                 )
+                self.EnvObject.env["pstpolicy_summary_result"] = {
+                    "summary_text": "Prod was created with the following values:",
+                    "report_fields": ["app_name", "policy_name", "version"],
+                    "data": {
+                        "app_name": self.appName,
+                        "policy_name": policyName,
+                        "version": self.pst.generalPkg["version"],
+                    },
+                }
                 return 0
         check = self.pst.checkPolicyVersion(
             policyName=policyName, definitionVersion=self.cacheVersion
@@ -512,12 +581,16 @@ class Prod:
             if updateComplete != 0:
                 self.EnvObject.logger.error("POLICY UPDATED FAILED!")
                 return 1
-<<<<<<< HEAD
-        print("Leaving prodPatch.")
-        self.EnvObject.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-=======
+            self.EnvObject.env["pstpolicy_summary_result"] = {
+                "summary_text": "Prod was updated with the following values:",
+                "report_fields": ["app_name", "policy_name", "version"],
+                "data": {
+                    "app_name": self.appName,
+                    "policy_name": policyName,
+                    "version": self.pst.generalPkg["version"],
+                },
+            }
         self.EnvObject.logger.info("Leaving prodPatch.")
->>>>>>> 2c144fe9e97d4d8338798548f323f91ecc112026
         return 0
 
 
@@ -555,7 +628,14 @@ class APM(URLGetter):
         },
     }
     output_variables = {
-        "patch_manager_summary_result": {"description": "Summary of action"}
+        "patch_manager_summary_result": {"description": "Summary of action"},
+        "cache_summary_result": {"description": "Summary of cache creation or update."},
+        "gamma_policy_summary_result": {
+            "description": "Summary of gamma policy creation or update."
+        },
+        "pstpolicy_summary_result": {
+            "description": "Summary of gamma policy creation or update."
+        },
     }
 
     def setup_logging(self):
@@ -585,9 +665,19 @@ class APM(URLGetter):
 
     def main(self):
         self.setup_logging()
-        self.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        self.logger.info(
+            "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        )
         self.logger.info("Starting APM main...")
+        if "gamma_summary_result" in self.env:
+            del self.env["gamma_summary_result"]
+        if "cache_summary_result" in self.env:
+            del self.env["cache_summary_result"]
+        if "pstpolicy_summary_result" in self.env:
+            del self.env["pstpolicy_summary_result"]
+        print("Setting up Cache ...")
         mainCache = Cache(self)
+        print("Setting up PST ...")
         pst = PST(self)
         cache = mainCache.get()
         if cache["version"] != "":
@@ -595,18 +685,26 @@ class APM(URLGetter):
             deltaInSeconds = 60 * 60 * 24 * int(self.env.get("productionDelay"))
             if time.time() + deltaInSeconds < cache["date"]:
                 self.logger.info("Delta time has elapsed running prod...")
+                print("Delta time has elapsed running prod...")
                 prod = Prod(self, pst, cache)
                 prod.prodPatch()
             else:
                 self.logger.info(
                     "Production Delay time has not been met, skipping production."
                 )
+                print("Production Delay time has not been met, skipping production.")
         else:
             self.logger.info("Cached version is empty so Production was skipped.")
+            print("Cached version is empty so Production was skipped.")
+        print("Setting up Gamma...")
         gamma = Gamma(self, pst)
+        print("Running Gamma ...")
         gamma.gammaPatch()
         self.logger.info("Leaving APM main.")
-        self.logger.info("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        print("Leaving APM main.")
+        self.logger.info(
+            "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+        )
 
 
 if __name__ == "__main__":
