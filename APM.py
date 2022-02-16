@@ -241,7 +241,7 @@ class PST:
         )
         response = self.EnvObject.download_with_curl(curl_cmd)
         if not response:
-            self.EnvObject.logger.ERROR("UPDATE TO JAMF FAILED!")
+            self.EnvObject.logger.error("UPDATE TO JAMF FAILED!")
             self.EnvObject.logger.info("Leaving updatePolicyVersion.")
             return 1
         else:
@@ -261,15 +261,16 @@ class PST:
             url=generalPolicyURL, headers=self.getJsonHeader
         )
         if not response:
-            self.EnvObject.logger.ERROR("UNABLE TO GET RESPONSE FROM GENERAL POLICY!")
+            self.EnvObject.logger.error("UNABLE TO GET RESPONSE FROM GENERAL POLICY!")
         try:
             decodedResponse = response.decode("utf-8")
             generalPolicy = json.loads(decodedResponse)
         except ValueError:
-            self.EnvObject.logger.info(
+            self.EnvObject.logger.error(
                 f"FAILED TO PARSE RESPONSE FROM GENERAL POLICY! {self.generalPolicyName}"
             )
-            self.EnvObject.logger.info("Leaving updatePolicyVersion.")
+            self.EnvObject.logger.info(f"Please make sure that {self.generalPolicyName} exists in JAMF.")
+            self.EnvObject.logger.info("Stopping processor immediately.")
             sys.exit()
         # Trying to make it so that multiple packages can exist in the policy
         # if pkgCount != 1:
@@ -287,7 +288,7 @@ class PST:
                     )
                     break
                 else:
-                    self.EnvObject.logger.ERROR(
+                    self.EnvObject.logger.error(
                         f"UNABLE TO FIND {self.EnvObject.env.get('applicationTitle')} "
                         f"IN GENERAL POLICY PACKAGES"
                     )
@@ -683,7 +684,7 @@ class APM(URLGetter):
         if cache["version"] != "":
             self.logger.info("Cache load version successful, checking delta...")
             deltaInSeconds = 60 * 60 * 24 * int(self.env.get("productionDelay"))
-            if time.time() + deltaInSeconds < cache["date"]:
+            if cache["date"] + deltaInSeconds < time.time():
                 self.logger.info("Delta time has elapsed running prod...")
                 print("Delta time has elapsed running prod...")
                 prod = Prod(self, pst, cache)
